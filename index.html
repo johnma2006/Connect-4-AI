@@ -1,0 +1,544 @@
+﻿<!DOCTYPE html>
+
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <title>Connect 4 AI</title>
+    <style type="text/css">
+        body {
+            background-color: #EDEDED;
+        }
+    </style>
+
+</head>
+<body>
+
+    <canvas id="canvas1" width="1000" height="700" style="border:0px solid #c3c3c3; margin-left:25%;margin-top:20px"></canvas>
+
+    <script>
+        var c;
+        var ctx;
+
+        var rows = 6;
+        var cols = 7;
+        var height = 100;
+        var fontSize = 80;
+        var lineWidth = 10;
+        var borderWidth = 2;
+        var radius = 32;
+        var topOffset = 0;
+
+        var board = Array();
+
+        var turn = 0;
+        var win = -1;
+        var mouseHover = -1;
+        var animationOffset = [[-1, -1], -1]; //piece, pixel offset
+        var animating = false;
+        var v_0 = 0;
+        var velocity = 10;
+        var accel = 0.3;
+        var depth = 3;
+        var timer = 0;
+        var numPieces = rows * cols;
+        var activeAI = false;
+
+        var debug = "";
+        var debug2 = "";
+        var debug3 = "";
+
+        function initialize() {
+            c = document.getElementById("canvas1");
+            ctx = c.getContext("2d");
+
+            initializeBoard();
+            drawBoard();
+
+            return setInterval(draw, 1);
+        }
+        function initializeBoard() {
+            for (var i = 0; i < cols; i++)
+                board[i] = ['', '', '', '', '', ''];
+        }
+
+        //Drawing functions
+        function drawBoard() {
+            ctx.fillStyle = "#A09A90";
+            ctx.fillRect(0, topOffset, height * cols + lineWidth + 2 * borderWidth, height * rows + lineWidth + 2 * borderWidth);
+
+            //ctx.fillStyle = "#B7AFA3";
+            //ctx.fillRect(lineWidth + borderWidth, topOffset + lineWidth + borderWidth, height * cols - lineWidth, height * rows - lineWidth);
+
+            for (var i = 0; i < cols; i++) {
+                for (var j = 0; j < rows; j++) {
+                    //Draw squares
+                    ctx.fillStyle = "#E8D0A9";
+                    if (!animating && win != -1 && ((win[0][0] == i && win[0][1] == j) ||
+                                                  (win[1][0] == i && win[1][1] == j) ||
+                                                  (win[2][0] == i && win[2][1] == j) ||
+                                                  (win[3][0] == i && win[3][1] == j)))
+                        ctx.fillStyle = "#E0D4C3";
+                    ctx.fillRect(i * height + lineWidth + borderWidth, topOffset + j * height + lineWidth + borderWidth, height - lineWidth, height - lineWidth);
+                    
+                }
+            }
+        }
+        function drawGrid() {
+            ctx.fillStyle = "#B7AFA3";
+            for (var i = 0; i < rows - 1; i++)
+                ctx.fillRect(lineWidth + borderWidth, topOffset + borderWidth + height * (i + 1), height * cols - lineWidth, lineWidth);
+
+            for (var i = 0; i < cols - 1; i++)
+                ctx.fillRect(borderWidth + height * (i + 1), topOffset + borderWidth + lineWidth, lineWidth, height * rows - lineWidth);
+
+
+        }
+        function draw() {
+            ctx.clearRect(0, 0, 1000, 1000);
+            win = checkWin(board); ctx.fillText(debug2, 730, 520);
+            drawBoard();
+            drawPieces();
+            drawGrid();
+            if (win != -1)
+                turn = board[win[0][0]][win[0][1]];
+
+            if (animating) {
+                animationOffset[1] -= velocity;
+                velocity += accel;
+                if (animationOffset[1] < 0) {
+                    animating = false;
+                    animationOffset = [[-1, -1], -1];
+                    turn = (turn + 1) % 2;
+                    timer = 5;
+                }
+            }
+            if (turn == 1 && !animating && win == -1 && timer == 0 && numPieces > 0) {
+                var bestMove = getBestMove(board, depth, 1);
+                move(bestMove[0], 1);
+            }
+            else if (activeAI && turn == 0 && !animating && win == -1 && timer == 0 && numPieces > 0) {
+                var bestMove = getBestMove(board, depth, 0);
+                move(bestMove[0], 0);
+            }
+            if (timer > 0)
+                timer--;
+
+            debug = "score: " + (score(board, 0) - score(board, 1));
+            ctx.fillStyle = '#000000';
+            ctx.font = "bold 32px Calibri";
+            ctx.fillText("Connect 4 AI", 730, 45);
+            ctx.font = "19px Calibri";
+            ctx.fillText("by John Ma", 730, 73);
+
+            ctx.font = "bold 24px Calibri";
+            ctx.fillText("Turn:", 730, 145);
+            if (turn == "0") {
+                ctx.beginPath();
+                ctx.arc(804, 137, 12, 0, 2 * Math.PI, false);
+                ctx.fillStyle = '#382F2F';
+                ctx.fill();
+                ctx.lineWidth = 3;
+                ctx.strokeStyle = '#000000';
+                ctx.stroke();
+            }
+            else {
+                ctx.beginPath();
+                ctx.arc(804, 137, 12, 0, 2 * Math.PI, false);
+                ctx.fillStyle = '#800000';
+                ctx.fill();
+                ctx.lineWidth = 3;
+                ctx.strokeStyle = '#380000';
+                ctx.stroke();
+            }
+
+            ctx.fillStyle = '#000000';
+            ctx.font = "bold 20px Calibri";
+            ctx.fillText("G/H to start/stop CPU v. CPU", 730, 195);
+            ctx.fillText("R to restart game", 730, 225);
+
+
+            /*
+            ctx.fillStyle = '#000000';
+            ctx.font = "14px Calibri";
+            ctx.fillText(debug, 730, 500);
+            ctx.fillText(debug2, 730, 520);
+            ctx.fillText(debug3, 730, 540);
+            ctx.fillText("mouseHover: " + mouseHover, 730, 560);*/
+        }
+        function drawPieces() {
+            if (mouseHover != -1) {
+                var y_pos = -1;
+                for (var j = cols - 1; j >= 0; j--)
+                    if (board[mouseHover][j] == "") {
+                        y_pos = j;
+                        break;
+                    }
+                if (animating)
+                    y_pos++;
+                if (turn == 0 && !activeAI) {
+                    ctx.beginPath();
+                    ctx.arc(mouseHover * height + 0.5 * height + lineWidth - borderWidth, topOffset + y_pos * height + 0.5 * height + lineWidth - borderWidth, radius, 0, 2 * Math.PI, false);
+                    ctx.fillStyle = '#A89F95';
+                    ctx.fill();
+                    ctx.lineWidth = 3;
+                    ctx.strokeStyle = '#A19A8F';
+                    ctx.stroke();
+                }
+                else if (turn == 1 && false) {
+                    ctx.beginPath();
+                    ctx.arc(mouseHover * height + 0.5 * height + lineWidth - borderWidth, topOffset + y_pos * height + 0.5 * height + lineWidth - borderWidth, radius, 0, 2 * Math.PI, false);
+                    ctx.fillStyle = '#B09A8F';
+                    ctx.fill();
+                    ctx.lineWidth = 3;
+                    ctx.strokeStyle = '#A89A8F';
+                    ctx.stroke();
+                }
+            }
+            for (var i = 0; i < cols; i++) {
+                for (var j = 0; j < rows; j++) {
+                    if (board[i][j] == "0") {
+                        ctx.beginPath();
+                        if (animationOffset[0][0] == i && animationOffset[0][1] == j)
+                            ctx.arc(i * height + 0.5 * height + lineWidth - borderWidth, topOffset + j * height + 0.5 * height + lineWidth - borderWidth - animationOffset[1], radius, 0, 2 * Math.PI, false);
+                        else
+                            ctx.arc(i * height + 0.5 * height + lineWidth - borderWidth, topOffset + j * height + 0.5 * height + lineWidth - borderWidth, radius, 0, 2 * Math.PI, false);
+                        ctx.fillStyle = '#382F2F';
+                        ctx.fill();
+                        ctx.lineWidth = 3;
+                        ctx.strokeStyle = '#000000';
+                        ctx.stroke();
+                    }
+                    if (board[i][j] == "1") {
+                        ctx.beginPath();
+                        if (animationOffset[0][0] == i && animationOffset[0][1] == j)
+                            ctx.arc(i * height + 0.5 * height + lineWidth - borderWidth, topOffset + j * height + 0.5 * height + lineWidth - borderWidth - animationOffset[1], radius, 0, 2 * Math.PI, false);
+                        else
+                            ctx.arc(i * height + 0.5 * height + lineWidth - borderWidth, topOffset + j * height + 0.5 * height + lineWidth - borderWidth, radius, 0, 2 * Math.PI, false);
+                        ctx.fillStyle = '#800000';
+                        ctx.fill();
+                        ctx.lineWidth = 3;
+                        ctx.strokeStyle = '#380000';
+                        ctx.stroke();
+                    }
+                }
+            }
+        }
+
+        //Game functions
+        function addClickElementToBoard(ev) {
+            if (!animating && mouseHover != -1 && win == -1) {
+                move(mouseHover, turn);
+            }
+        }
+        function trackMouse(ev) {
+            var x = ev.clientX - c.offsetLeft;
+
+            x = Math.floor((x - lineWidth - borderWidth) / height);
+
+            if (x >= 0 && x < cols && generateMove(board, x, turn) != -1 && win == -1 && !animating)
+                mouseHover = x;
+            else if (!animating)
+                mouseHover = -1;
+        }
+        function doKeyDown(evt) {
+            
+            switch (evt.keyCode) {
+                case 71: //G
+                    activeAI = true;
+                    break;
+                case 72: //H
+                    activeAI = false;
+                    break;
+                case 82: //R
+                    activeAI = false;
+                    turn = 0;
+                    animating = false;
+                    initializeBoard();
+                    break;
+            }
+        }
+        function move(col, turn2) {
+
+            y_pos = -1;
+            for (var j = rows - 1; j >= 0; j--) 
+                if (board[col][j] == "") {
+                    y_pos = j;
+                    break;
+                }
+
+            //Move to col, y_pos
+            board[col][y_pos] = turn2.toString();
+            animationOffset = [[col, y_pos], height * (y_pos + 1)];
+            animating = true;
+            velocity = v_0;
+            numPieces--;
+        }
+        function checkWin(testBoard) {
+
+            player0 = findPiecesInSequence(testBoard, "0000");
+            if (player0 != -1)
+                return player0[0];
+            player1 = findPiecesInSequence(testBoard, "1111");
+            if (player1 != -1)
+                return player1[0];
+            return -1;
+        }
+        function findPiecesInSequence(testBoard, string) {
+
+            var temp = "";
+            var sequences = Array();
+            //Columns
+            for (var i = 0; i < cols; i++) {
+                temp = "";
+                for (var j = 0; j < rows; j++) {
+                    temp += testBoard[i][j];
+                    if (testBoard[i][j] == "")
+                        temp += ".";
+                }
+                index = temp.indexOf(string);
+                if (index != -1)
+                    sequences.push([[i, index],
+                            [i, index + 1],
+                            [i, index + 2],
+                            [i, index + 3]]);
+            }
+
+            //Rows
+            for (var j = 0; j < rows; j++) {
+                temp = "";
+                for (var i = 0; i < cols; i++) {
+                    temp += testBoard[i][j];
+                    if (testBoard[i][j] == "")
+                        temp += ".";
+                }
+                index = temp.indexOf(string);
+                if (index != -1)
+                    sequences.push([[index, j],
+                            [index + 1, j],
+                            [index + 2, j],
+                            [index + 3, j]]);
+            }
+
+            //Diagonals
+            var diagonals = new Array();
+            for (var i = 0; i < rows + cols - 1; i++)
+                diagonals[i] = "";
+
+            for (var i = 0; i < cols; i++) {
+                for (var j = 0; j < rows; j++) {
+                    diagonals[i + j] += testBoard[i][j]
+                    if (testBoard[i][j] == "")
+                        diagonals[i + j] += ".";
+                }
+            }
+            for (var i = 0; i < rows + cols - 1; i++) {
+                index = diagonals[i].indexOf(string);
+                if (index != -1) {
+                    if (i < rows) {
+                        sequences.push([[index, i - index],
+                                [index + 1, i - index - 1],
+                                [index + 2, i - index - 2],
+                                [index + 3, i - index - 3]]);
+                    }
+                    else {
+                        sequences.push([[i - rows + 1 + index, rows - 1 - index],
+                                [i - rows + 1 + index + 1, rows - 1 - index - 1],
+                                [i - rows + 1 + index + 2, rows - 1 - index - 2],
+                                [i - rows + 1 + index + 3, rows - 1 - index - 3]]);
+                    }
+                }
+            }
+            //Diagonals 2, j -> (rows - 1 - j)
+            diagonals = new Array();
+            for (var i = 0; i < rows + cols - 1; i++)
+                diagonals[i] = "";
+
+            for (var i = 0; i < cols; i++) {
+                for (var j = 0; j < rows; j++) {
+                    diagonals[i + rows - 1 - j] += testBoard[i][j]
+                    if (testBoard[i][j] == "")
+                        diagonals[i + rows - 1 - j] += ".";
+                }
+            }
+            for (var i = 0; i < rows + cols - 1; i++) {
+                index = diagonals[i].indexOf(string);
+                if (index != -1) {
+                    if (i < rows) {
+                        sequences.push([[index, rows - 1 - (i - index)],
+                                [index + 1, rows - 1 - (i - index - 1)],
+                                [index + 2, rows - 1 - (i - index - 2)],
+                                [index + 3, rows - 1 - (i - index - 3)]]);
+                    }
+                    else {
+                        sequences.push([[i - rows + 1 + index, rows - 1 - (rows - 1 - index)],
+                                [i - rows + 1 + index + 1, rows - 1 - (rows - 1 - index - 1)],
+                                [i - rows + 1 + index + 2, rows - 1 - (rows - 1 - index - 2)],
+                                [i - rows + 1 + index + 3, rows - 1 - (rows - 1 - index - 3)]]);
+                    }
+                }
+            }
+            if (sequences.length == 0)
+                return -1;
+            return sequences;
+        }
+
+        //AI functions
+        function generateMove(testBoard, col, turn) {
+            var newTestBoard = Array();
+            for (var i2 = 0; i2 < cols; i2++)
+                newTestBoard[i2] = testBoard[i2].slice();
+
+            for (var j = rows - 1; j >= 0; j--)
+                if (newTestBoard[col][j] == "") {
+                    newTestBoard[col][j] = turn.toString();
+                    return newTestBoard;
+                }
+            return -1;
+        }
+        function getBestMove(testBoard, iterations, turn) {
+            if (iterations == 1) {
+                if (turn == 0)
+                    return [-1, score(testBoard, 0) - score(testBoard, 1)];
+                else
+                    return [-1, score(testBoard, 1) - score(testBoard, 0)];
+            }
+            else {
+                var maxScore = -9999999.9;
+                var bestMove;
+                var minScore = 9999999.9;
+                var worstMove = -1;
+                var newTestBoard;
+                var newTestBoard2;
+                var bestMoves = Array();
+                var breakOut = false;
+                var colBad = false;
+            
+                for (var col = 0; col < cols; col++) {
+                    colBad = false;
+                    newTestBoard = generateMove(testBoard, col, turn);
+
+                    if (newTestBoard != -1) {
+                        minScore = 9999999;
+                        for (var col2 = 0; col2 < cols; col2++) {
+                            newTestBoard2 = generateMove(newTestBoard, col2, 1 - turn)
+
+                            if (newTestBoard2 != -1) {
+                                if (turn == 0)
+                                    if (checkWin(newTestBoard2) != -1 && newTestBoard2[checkWin(newTestBoard2)[0][0]][checkWin(newTestBoard2)[0][1]] == "1") {
+                                        colBad = true;
+                                        break;
+                                    }
+                                else if (turn == 1)
+                                    if (checkWin(newTestBoard2) != -1 && newTestBoard2[checkWin(newTestBoard2)[0][0]][checkWin(newTestBoard2)[0][1]] == "0") {
+                                        colBad = true;
+                                        break;
+                                    }
+
+                                var best = getBestMove(newTestBoard2, iterations - 1, turn);
+
+                                if (best[1] < minScore)
+                                    minScore = best[1];
+
+                                if (minScore < maxScore)
+                                    break;
+                            }
+                        }
+                        if (!colBad) {
+                            if (minScore > maxScore) {
+                                maxScore = minScore;
+                                bestMove = col;
+                                bestMoves = [col];
+                            }
+                            else if (iterations == depth && minScore == maxScore)
+                                bestMoves.push(col)
+                        }
+                    }
+                }
+                if (iterations == depth) {
+                    if (bestMoves.length == 0) {
+                        for (var i = 0; i < cols; i++)
+                            if (generateMove(testBoard, i, turn) != -1)
+                                bestMoves.push(i);
+                    }
+                    var index = Math.floor(Math.random() * bestMoves.length);
+                    return [bestMoves[index], maxScore];
+                }
+                return [bestMove, maxScore];
+            }
+
+        } //returns [col, score]
+        function score(testBoard, turn) {
+            if (testBoard == -1)
+                return -9999999.9;
+            var check = checkWin(testBoard);
+            if (check != -1 && turn == 0 && testBoard[check[0][0]][check[0][1]] == "0")
+                return 100000.0;
+            if (check != -1 && turn == 1 && testBoard[check[0][0]][check[0][1]] == "1")
+                return 100000.0;
+
+            var score = 0.0;
+
+            //3 in a row, 2.0pts + 0.05 * (cols - freespaces)
+            if (turn == 0)
+                var config = [".000", "0.00", "00.0", "000."];
+            else
+                var config = [".111", "1.11", "11.1", "111."];
+
+            var sequences;
+            var count = 0;
+            for (var c in config) {
+                sequences = findPiecesInSequence(testBoard, config[c]);
+
+                for (var s in sequences) {
+                    count = 0;
+                    for (var j = sequences[s][c][1]; j < rows; j++) {
+                        if (testBoard[sequences[s][c][0]][j] == "")
+                            count++;
+                        else
+                            break;
+                    }
+                    score += 2.0 + 0.05 * (cols - count);
+                }
+            }
+
+            //2 in a row, 0.05pts
+            if (turn == 0)
+                config = ["..00", ".00.", "00.."];
+            else
+                config = ["..11", ".11.", "11.."];
+
+            for (var c in config) {
+                sequences = findPiecesInSequence(testBoard, config[c]);
+                if (sequences != -1)
+                    score += 0.05 * findPiecesInSequence(testBoard, config[c]).length;
+            }
+
+            //Centre pieces worth more, 0.1pts / 0.05pts each
+            if (turn == 0)
+                var string = "0";
+            else
+                var string = "1";
+
+            for (var i = 0; i < rows; i++) {
+                if (testBoard[3][i] == string)
+                    score += 0.1;
+                if (testBoard[4][i] == string)
+                    score += 0.05;
+                if (testBoard[5][i] == string)
+                    score += 0.05;
+            }
+
+
+            return score;
+        }
+
+        initialize();
+
+        window.addEventListener('keydown', doKeyDown, true);
+        window.addEventListener('click', addClickElementToBoard, true);
+        window.addEventListener('mousemove', trackMouse, true);
+
+    </script>
+
+</body>
+</html>
