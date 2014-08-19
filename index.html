@@ -95,7 +95,7 @@
         }
         function draw() {
             ctx.clearRect(0, 0, 1000, 1000);
-            win = checkWin(board); ctx.fillText(debug2, 730, 520);
+            win = checkWin(board);
             drawBoard();
             drawPieces();
             drawGrid();
@@ -156,13 +156,12 @@
             ctx.fillText("G/H to start/stop CPU v. CPU", 730, 195);
             ctx.fillText("R to restart game", 730, 225);
 
-
             /*
             ctx.fillStyle = '#000000';
             ctx.font = "14px Calibri";
             ctx.fillText(debug, 730, 500);
-            ctx.fillText(debug2, 730, 520);
-            ctx.fillText(debug3, 730, 540);
+            ctx.fillText(win, 730, 520);
+            ctx.fillText(timer, 730, 540);
             ctx.fillText("mouseHover: " + mouseHover, 730, 560);*/
         }
         function drawPieces() {
@@ -226,7 +225,7 @@
 
         //Game functions
         function addClickElementToBoard(ev) {
-            if (!animating && mouseHover != -1 && win == -1) {
+            if (!animating && mouseHover != -1 && win == -1 && turn == 0) {
                 move(mouseHover, turn);
             }
         }
@@ -253,6 +252,7 @@
                     activeAI = false;
                     turn = 0;
                     animating = false;
+                    numPieces = rows * cols;
                     initializeBoard();
                     break;
             }
