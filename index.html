@@ -412,12 +412,31 @@
                 var bestMoves = Array();
                 var breakOut = false;
                 var colBad = false;
+                var colGood = false;
             
                 for (var col = 0; col < cols; col++) {
                     colBad = false;
+                    colGood = false;
                     newTestBoard = generateMove(testBoard, col, turn);
 
                     if (newTestBoard != -1) {
+                        if (turn == 0) {
+                            if (checkWin(newTestBoard) != -1 && newTestBoard[checkWin(newTestBoard)[0][0]][checkWin(newTestBoard)[0][1]] == "0") {
+                                colGood = true;
+                                minScore = 9999999.9;
+                                break;
+                            }
+                        }
+                        else if (turn == 1) {
+                            if (checkWin(newTestBoard) != -1 && newTestBoard[checkWin(newTestBoard)[0][0]][checkWin(newTestBoard)[0][1]] == "1") {
+                                colGood = true;
+                                minScore = 9999999.9;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (newTestBoard != -1 && !colGood) {
                         minScore = 9999999;
                         for (var col2 = 0; col2 < cols; col2++) {
                             newTestBoard2 = generateMove(newTestBoard, col2, 1 - turn)
@@ -468,6 +487,7 @@
 
         } //returns [col, score]
         function score(testBoard, turn) {
+            
             if (testBoard == -1)
                 return -9999999.9;
             var check = checkWin(testBoard);
